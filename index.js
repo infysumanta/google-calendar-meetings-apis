@@ -1,6 +1,7 @@
 const express = require('express');
 const { google } = require('googleapis');
 require('dotenv').config();
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 5002;
@@ -17,7 +18,17 @@ app.get('/', (req, res) => {
 app.get('/auth/google', (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/calendar'],
+    scope: [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/calendar.events.readonly',
+      'https://www.googleapis.com/auth/calendar.addons.execute',
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'openid',
+      'email',
+    ],
   });
   res.redirect(url);
 });
@@ -35,11 +46,11 @@ app.get('/create-meeting', async (req, res) => {
   const meetingData = {
     summary: 'My Meeting',
     start: {
-      dateTime: '2023-05-28T10:00:00',
+      dateTime: '2023-05-31T10:00:00',
       timeZone: 'Asia/Kolkata',
     },
     end: {
-      dateTime: '2023-05-28T11:00:00',
+      dateTime: '2023-05-31T11:00:00',
       timeZone: 'Asia/Kolkata',
     },
     attendees: [
@@ -47,16 +58,62 @@ app.get('/create-meeting', async (req, res) => {
       { email: 'sumantablog@gmail.com' },
       { email: 'kabi.paritosh22@gmail.com', optional: true },
     ],
-    sendUpdates: 'all',
-    visibility: 'public',
+
+    // conferenceData: {
+    //   createRequest: { requestId: uuidv4() },
+    // },
+    conferenceData: {
+      createRequest: {
+        requestId: 'randomstring', // Use a unique string for each meeting
+        conferenceSolutionKey: {
+          type: 'hangoutsMeet',
+        },
+      },
+      conferenceSolution: {
+        key: {
+          type: 'hangoutsMeet',
+        },
+      },
+      entryPoints: [
+        {
+          entryPointType: 'video',
+          uri: 'https://meet.google.com/abcd-efgh-ijkl',
+          label: 'Google Meet',
+        },
+      ],
+      conferenceId: 'abcd-efgh-ijkl',
+      conferenceDataVersion: 1,
+    },
   };
 
   try {
     const meeting = await calendar.events.insert({
       calendarId: 'primary',
+      conferenceDataVersion: 1,
       resource: meetingData,
       sendUpdates: 'all',
     });
+
+    const eventId = meeting.data.id;
+
+    console.log(meeting.data.hangoutLink);
+
+    // // Add the Google Meet link to the event description
+    const eventUpdate = {
+      description: `Please join the meeting using the following link: ${meeting.data.hangoutLink}`,
+      sendUpdates: 'all',
+      visibility: 'public',
+      sendNotifications: true,
+    };
+
+    // const update = await calendar.events.patch({
+    //   calendarId: "primary",
+    //   eventId: eventId,
+    //   resource: eventUpdate,
+    //   conferenceDataVersion: 1,
+    //   sendUpdates: "all",
+    // });
+
     res.json({ meeting });
   } catch (error) {
     console.error('Error creating meeting:', error);
